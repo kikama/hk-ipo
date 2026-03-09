@@ -1,4 +1,75 @@
-// 港股IPO数据模块 - 支持实时数据更新
+// 港股IPO数据模块 - 支持 iTick 实时数据 + 本地静态数据兜底
+import { fetchHKIpoList, fetchHKQuotes, formatIpoItem, formatQuote, hasToken } from './itick-api.js';
+
+// ============ iTick 实时数据加载 ============
+
+/**
+ * 从 iTick API 加载港股 IPO 列表（upcoming + recent）
+ * 返回格式化后的 IPO 数组，失败时返回 null
+ */
+export async function loadIpoFromAPI() {
+  if (!hasToken()) return null;
+  try {
+    const [upcoming, recent] = await Promise.allSettled([
+      fetchHKIpoList('upcoming'),
+      fetchHKIpoList('recent')
+    ]);
+
+    const results = [];
+    const seen = new Set();
+
+    const processItems = (items) => {
+      if (!Array.isArray(items)) return;
+      items.forEach(raw => {
+        const key = raw.sc || raw.cn;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          results.push(formatIpoItem(raw));
+        }
+      });
+    };
+
+    if (upcoming.status === 'fulfilled' && upcoming.value) {
+      const data = Array.isArray(upcoming.value) ? upcoming.value : [upcoming.value];
+      processItems(data);
+    }
+    if (recent.status === 'fulfilled' && recent.value) {
+      const data = Array.isArray(recent.value) ? recent.value : [recent.value];
+      processItems(data);
+    }
+
+    return results.length > 0 ? results : null;
+  } catch (e) {
+    console.warn('iTick IPO 数据加载失败，使用本地数据:', e.message);
+    return null;
+  }
+}
+
+/**
+ * 从 iTick API 加载已上市股票的实时报价
+ * @param {string[]} codes 港股代码（纯数字，如 ['2692', '2649']）
+ */
+export async function loadQuotesFromAPI(codes) {
+  if (!hasToken() || !codes || codes.length === 0) return {};
+  try {
+    const rawQuotes = await fetchHKQuotes(codes);
+    const result = {};
+    Object.entries(rawQuotes).forEach(([code, raw]) => {
+      const formatted = formatQuote(raw);
+      if (formatted && formatted.price > 0) {
+        // 统一转为 XXXXX.HK 格式
+        const hkCode = `${String(code).padStart(5, '0')}.HK`;
+        result[hkCode] = formatted;
+      }
+    });
+    return result;
+  } catch (e) {
+    console.warn('iTick 报价加载失败:', e.message);
+    return {};
+  }
+}
+
+// ============ 静态本地数据（兜底 + 深度分析） ============
 
 export const ipoData = [
   {

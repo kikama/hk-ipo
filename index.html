@@ -59,6 +59,11 @@
           <span>更新中</span>
         </div>
         <div class="flex items-center gap-2">
+          <!-- iTick API 状态按钮 -->
+          <button id="api-config-btn" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-gray-700 text-gray-400 hover:border-yellow-500/50 hover:text-yellow-400 transition-all">
+            <span id="api-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
+            <span id="api-label">设置 iTick</span>
+          </button>
           <span class="text-xs text-gray-500">实时：</span>
           <span class="text-xs text-green-400 font-mono" id="update-time"></span>
           <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse ml-1"></span>
@@ -338,6 +343,65 @@
   <!-- 详情弹窗 -->
   <div id="modal-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div id="modal-content" class="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"></div>
+  </div>
+
+  <!-- iTick API Token 设置弹窗 -->
+  <div id="token-modal-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg p-6">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-yellow-400/10 flex items-center justify-center">
+            <i class="fa-solid fa-key text-yellow-400"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-white">设置 iTick API Token</h3>
+            <p class="text-xs text-gray-400">连接后可获取港股实时行情和IPO数据</p>
+          </div>
+        </div>
+        <button id="token-cancel-btn" class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- 说明 -->
+      <div class="bg-blue-900/20 border border-blue-800/50 rounded-xl p-4 mb-5">
+        <div class="flex items-start gap-2">
+          <i class="fa-solid fa-circle-info text-blue-400 mt-0.5 shrink-0"></i>
+          <div class="text-xs text-gray-300 space-y-1">
+            <p>1. 前往 <a href="https://itick.org" target="_blank" class="text-blue-400 hover:underline">itick.org</a> 注册账号并获取 API Token</p>
+            <p>2. 免费账号支持港股实时行情和 IPO 数据查询</p>
+            <p>3. Token 仅保存在本地浏览器，不会上传到任何服务器</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token 输入 -->
+      <div class="mb-5">
+        <label class="block text-sm text-gray-300 mb-2">API Token</label>
+        <input id="token-input" type="password"
+          placeholder="请输入您的 iTick API Token..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 transition-colors" />
+        <p class="text-xs text-gray-500 mt-1.5">Token 格式示例：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
+      </div>
+
+      <!-- API 状态 -->
+      <div id="api-status" class="hidden mb-4 flex items-center gap-2 text-xs text-gray-400 bg-gray-800/50 rounded-lg px-3 py-2">
+        <i class="fa-solid fa-circle-notch fa-spin text-yellow-400"></i>
+        <span id="api-status-text">正在连接...</span>
+      </div>
+
+      <!-- 按钮 -->
+      <div class="flex gap-3">
+        <button id="token-cancel-btn-2" onclick="document.getElementById('token-modal-overlay').classList.add('hidden')"
+          class="flex-1 py-2.5 rounded-xl border border-gray-700 text-gray-400 text-sm hover:border-gray-500 transition-all">
+          取消
+        </button>
+        <button id="token-save-btn"
+          class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-gray-900 font-bold text-sm hover:from-yellow-400 hover:to-orange-400 transition-all">
+          <i class="fa-solid fa-plug mr-1.5"></i>连接 iTick
+        </button>
+      </div>
+    </div>
   </div>
 
   <script src="data.js" type="module"></script>

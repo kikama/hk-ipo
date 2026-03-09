@@ -1,6 +1,11 @@
-// 主逻辑模块 - 支持实时数据更新
-import { ipoData, calendarData, liveQuotes, liveNews, simulatePriceUpdate, simulateSubscriptionUpdate, generateLiveNews } from './data.js';
+// 主逻辑模块 - 支持 iTick 实时数据
+import { ipoData, calendarData, liveQuotes, liveNews, simulatePriceUpdate, simulateSubscriptionUpdate, generateLiveNews, loadIpoFromAPI, loadQuotesFromAPI } from './data.js';
 import { initCharts } from './charts.js';
+import { getToken, setToken, hasToken, testConnection } from './itick-api.js';
+
+// ============ 当前展示数据（可被 API 数据覆盖）============
+let activeIpoData = [...ipoData];
+let activeQuotes = { ...liveQuotes };
 
 // ============ 实时时钟 ============
 function updateClock() {
@@ -15,6 +20,127 @@ setInterval(updateClock, 1000);
 
 // 初始化图表
 initCharts();
+
+// ============ iTick API 数据加载 ============
+let apiDataLoaded = false;
+
+async function loadRealTimeData() {
+  if (!hasToken()) return;
+
+  const statusEl = document.getElementById('api-status');
+  const statusText = document.getElementById('api-status-text');
+
+  if (statusEl) statusEl.classList.remove('hidden');
+  if (statusText) statusText.textContent = '正在从 iTick 加载实时数据...';
+
+  try {
+    // 并行加载 IPO 列表和实时报价
+    const [apiIpos, apiQuotes] = await Promise.allSettled([
+      loadIpoFromAPI(),
+      loadQuotesFromAPI(['2692', '2649', '2715', '3268'])
+    ]);
+
+    let dataUpdated = false;
+
+    // 更新 IPO 列表（如果 API 返回了数据）
+    if (apiIpos.status === 'fulfilled' && apiIpos.value && apiIpos.value.length > 0) {
+      // 将 API 数据与本地深度分析数据合并
+      // 优先使用本地数据（含深度分析），API 数据补充新标的
+      const localCodes = new Set(ipoData.map(d => d.rawCode || d.code.replace('.HK', '').replace(/^0+/, '')));
+      const newItems = apiIpos.value.filter(item => {
+        const rawCode = String(item.rawCode || '').replace(/^0+/, '');
+        return !localCodes.has(rawCode);
+      });
+
+      if (newItems.length > 0) {
+        activeIpoData = [...ipoData, ...newItems];
+        dataUpdated = true;
+        showToast(`iTick: 发现 ${newItems.length} 只新IPO标的`, 'success');
+      }
+    }
+
+    // 更新实时报价
+    if (apiQuotes.status === 'fulfilled' && Object.keys(apiQuotes.value).length > 0) {
+      Object.assign(activeQuotes, apiQuotes.value);
+      // 同步更新 liveQuotes
+      Object.assign(liveQuotes, apiQuotes.value);
+      dataUpdated = true;
+    }
+
+    if (dataUpdated) {
+      renderIpoCards(currentFilter);
+      renderDetailTabs();
+      renderDetailContent();
+      renderLivePrices();
+      if (statusText) statusText.textContent = `iTick 数据已更新 · ${new Date().toLocaleTimeString('zh-HK')}`;
+      apiDataLoaded = true;
+    } else {
+      if (statusText) statusText.textContent = 'iTick 已连接 · 使用本地数据';
+    }
+  } catch (e) {
+    console.warn('iTick 数据加载失败:', e.message);
+    if (statusText) statusText.textContent = `连接失败: ${e.message}`;
+    showToast('iTick 数据加载失败，使用本地数据', 'warning');
+  }
+}
+
+// ============ Token 设置弹窗 ============
+function openTokenModal() {
+  const existing = getToken();
+  const overlay = document.getElementById('token-modal-overlay');
+  const input = document.getElementById('token-input');
+  if (overlay) overlay.classList.remove('hidden');
+  if (input) input.value = existing;
+}
+
+function closeTokenModal() {
+  const overlay = document.getElementById('token-modal-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+async function saveToken() {
+  const input = document.getElementById('token-input');
+  const token = input ? input.value.trim() : '';
+  if (!token) {
+    showToast('请输入有效的 API Token', 'error');
+    return;
+  }
+
+  setToken(token);
+  showToast('Token 已保存，正在测试连接...', 'info');
+  closeTokenModal();
+
+  // 测试连接
+  const result = await testConnection();
+  if (result.ok) {
+    showToast('✅ iTick 连接成功！正在加载实时数据...', 'success');
+    updateApiStatusUI(true);
+    await loadRealTimeData();
+  } else {
+    showToast(`❌ 连接失败: ${result.error}`, 'error');
+    updateApiStatusUI(false);
+  }
+}
+
+function updateApiStatusUI(connected) {
+  const btn = document.getElementById('api-config-btn');
+  const dot = document.getElementById('api-dot');
+  const label = document.getElementById('api-label');
+  if (connected) {
+    if (dot) dot.className = 'w-2 h-2 rounded-full bg-green-400 animate-pulse';
+    if (label) label.textContent = 'iTick 已连接';
+    if (btn) btn.className = btn.className.replace('border-gray-700 text-gray-400', 'border-green-500/50 text-green-400');
+  } else {
+    if (dot) dot.className = 'w-2 h-2 rounded-full bg-red-400';
+    if (label) label.textContent = 'iTick 未连接';
+  }
+}
+
+// 页面加载时检查 token 并自动加载
+if (hasToken()) {
+  updateApiStatusUI(true);
+  loadRealTimeData();
+}
 
 // ============ 工具函数 ============
 function getStatusConfig(status) {
@@ -99,9 +225,9 @@ function addNewsItem(item) {
 function renderLivePrices() {
   const container = document.getElementById('live-prices');
   if (!container) return;
-  const listedIpos = ipoData.filter(d => d.status === 'listed' && liveQuotes[d.code]);
+  const listedIpos = activeIpoData.filter(d => d.status === 'listed' && activeQuotes[d.code]);
   container.innerHTML = listedIpos.map(ipo => {
-    const q = liveQuotes[ipo.code];
+    const q = activeQuotes[ipo.code];
     const isUp = q.change >= 0;
     return `
     <div class="live-price-item flex items-center gap-3 bg-gray-800/60 border border-gray-700 rounded-xl px-4 py-3 min-w-[200px]" data-code="${ipo.code}">
@@ -122,9 +248,66 @@ function renderLivePrices() {
   }).join('');
 }
 
-// ============ 实时价格更新（闪烁动画）============
+// ============ 实时价格更新（真实API + 模拟兜底）============
+async function updateLivePricesReal() {
+  if (hasToken()) {
+    try {
+      const codes = activeIpoData
+        .filter(d => d.status === 'listed')
+        .map(d => d.rawCode || d.code.replace('.HK', '').replace(/^0+/, ''))
+        .filter(Boolean)
+        .slice(0, 10);
+
+      if (codes.length > 0) {
+        const newQuotes = await loadQuotesFromAPI(codes);
+        if (Object.keys(newQuotes).length > 0) {
+          Object.assign(activeQuotes, newQuotes);
+          Object.assign(liveQuotes, newQuotes);
+          // 更新 UI
+          Object.keys(newQuotes).forEach(code => {
+            const q = newQuotes[code];
+            const isUp = q.change >= 0;
+            const priceEl = document.querySelector(`.price-value[data-code="${code}"]`);
+            const changeEl = document.querySelector(`.change-value[data-code="${code}"]`);
+            const itemEl = document.querySelector(`.live-price-item[data-code="${code}"]`);
+            if (priceEl) {
+              const oldPrice = parseFloat(priceEl.textContent);
+              priceEl.textContent = q.price.toFixed(2);
+              priceEl.className = `text-lg font-bold ${isUp ? 'text-green-400' : 'text-red-400'} price-value`;
+              const flashClass = q.price > oldPrice ? 'price-flash-up' : q.price < oldPrice ? 'price-flash-down' : '';
+              if (flashClass && itemEl) {
+                itemEl.classList.add(flashClass);
+                setTimeout(() => itemEl.classList.remove(flashClass), 600);
+              }
+            }
+            if (changeEl) {
+              changeEl.textContent = `${isUp ? '+' : ''}${q.change.toFixed(2)}%`;
+              changeEl.className = `text-xs ${isUp ? 'text-green-400' : 'text-red-400'} change-value`;
+            }
+            // 同步卡片价格
+            document.querySelectorAll(`.live-card-price[data-code="${code}"]`).forEach(el => {
+              el.textContent = q.price.toFixed(2);
+              el.className = `text-xs font-bold ${isUp ? 'text-green-400' : 'text-red-400'} live-card-price`;
+            });
+            document.querySelectorAll(`.live-card-change[data-code="${code}"]`).forEach(el => {
+              el.textContent = `(${isUp ? '+' : ''}${q.change.toFixed(2)}%)`;
+              el.className = `text-xs ${isUp ? 'text-green-400' : 'text-red-400'} live-card-change`;
+            });
+          });
+          return; // 真实数据更新成功，不需要模拟
+        }
+      }
+    } catch (e) {
+      console.warn('实时报价更新失败，降级为模拟:', e.message);
+    }
+  }
+  // 降级：使用模拟数据
+  updateLivePrices();
+}
+
 function updateLivePrices() {
   const updates = simulatePriceUpdate();
+  Object.assign(activeQuotes, updates);
   Object.keys(updates).forEach(code => {
     const q = updates[code];
     const isUp = q.change >= 0;
@@ -185,38 +368,31 @@ function triggerRefresh(manual = false) {
   }
   if (indicator) indicator.classList.remove('hidden');
 
-  // 模拟数据刷新
-  setTimeout(() => {
-    updateLivePrices();
-
-    // 随机添加新闻
-    if (Math.random() > 0.4) {
-      addNewsItem(generateLiveNews());
+  // 刷新数据（有 token 时用真实 API）
+  const doRefresh = async () => {
+    if (hasToken()) {
+      await loadRealTimeData();
+    } else {
+      updateLivePrices();
+      if (Math.random() > 0.4) addNewsItem(generateLiveNews());
+      const subUpdates = simulateSubscriptionUpdate();
+      subUpdates.forEach(update => {
+        const el = document.querySelector(`[data-sub-id="${update.id}"]`);
+        if (el) {
+          el.textContent = update.subscriptionTimes;
+          el.classList.add('data-flash');
+          setTimeout(() => el.classList.remove('data-flash'), 800);
+        }
+      });
     }
 
-    // 更新招股中标的的认购倍数
-    const subUpdates = simulateSubscriptionUpdate();
-    subUpdates.forEach(update => {
-      const el = document.querySelector(`[data-sub-id="${update.id}"]`);
-      if (el) {
-        el.textContent = update.subscriptionTimes;
-        el.classList.add('data-flash');
-        setTimeout(() => el.classList.remove('data-flash'), 800);
-      }
-    });
-
-    if (btn) {
-      btn.classList.remove('animate-spin');
-      btn.disabled = false;
-    }
+    if (btn) { btn.classList.remove('animate-spin'); btn.disabled = false; }
     if (indicator) indicator.classList.add('hidden');
-
-    if (manual) {
-      showToast('数据已刷新', 'success');
-    }
-
+    if (manual) showToast(hasToken() ? '✅ 已从 iTick 刷新实时数据' : '数据已刷新（模拟）', 'success');
     isRefreshing = false;
-  }, 800);
+  };
+
+  doRefresh();
 }
 
 // ============ Toast 提示 ============
@@ -246,7 +422,7 @@ function renderIpoCard(ipo) {
     : `<span class="text-gray-500">${ipo.firstDayChange}</span>`;
 
   // 实时价格（已上市股票）
-  const liveQ = liveQuotes[ipo.code];
+  const liveQ = activeQuotes[ipo.code];
   const livePriceHtml = liveQ
     ? `<div class="flex items-center gap-1 mt-1">
         <span class="text-xs text-gray-500">实时：</span>
@@ -345,7 +521,7 @@ function renderIpoCard(ipo) {
 
 function renderIpoCards(filter = 'all') {
   const container = document.getElementById('ipo-cards');
-  const filtered = filter === 'all' ? ipoData : ipoData.filter(d => d.status === filter);
+  const filtered = filter === 'all' ? activeIpoData : activeIpoData.filter(d => d.status === filter);
   container.innerHTML = filtered.map(renderIpoCard).join('');
 
   container.querySelectorAll('.ipo-card').forEach(card => {
@@ -382,12 +558,13 @@ document.getElementById('filter-btns').addEventListener('click', (e) => {
 });
 
 // ============ 深度分析标签页 ============
-const detailIpos = ipoData.filter(d => d.score >= 7 || d.id <= 3);
+const detailIpos = activeIpoData.filter(d => d.score >= 7 || d.id <= 3);
 let activeDetailId = detailIpos[0]?.id;
 
 function renderDetailTabs() {
   const tabsEl = document.getElementById('detail-tabs');
-  tabsEl.innerHTML = detailIpos.map(ipo => `
+  const currentDetailIpos = activeIpoData.filter(d => (d.score !== null && d.score >= 7) || d.id <= 3);
+  tabsEl.innerHTML = currentDetailIpos.map(ipo => `
     <button class="detail-tab shrink-0 text-sm px-4 py-2 rounded-full border transition-all ${
       ipo.id === activeDetailId
         ? 'border-yellow-500 bg-yellow-500/20 text-yellow-400'
@@ -408,12 +585,12 @@ function renderDetailTabs() {
 }
 
 function renderDetailContent() {
-  const ipo = ipoData.find(d => d.id === activeDetailId);
+  const ipo = activeIpoData.find(d => d.id === activeDetailId);
   if (!ipo) return;
   const el = document.getElementById('detail-content');
   const recCfg = getRecommendConfig(ipo.recommendation);
   const scoreColor = getScoreColor(ipo.score);
-  const liveQ = liveQuotes[ipo.code];
+  const liveQ = activeQuotes[ipo.code];
 
   el.innerHTML = `
   <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
@@ -590,13 +767,13 @@ renderCalendar();
 
 // ============ 弹窗 ============
 function openModal(id) {
-  const ipo = ipoData.find(d => d.id === id);
+  const ipo = activeIpoData.find(d => d.id === id);
   if (!ipo) return;
   const overlay = document.getElementById('modal-overlay');
   const content = document.getElementById('modal-content');
   const recCfg = getRecommendConfig(ipo.recommendation);
   const scoreColor = getScoreColor(ipo.score);
-  const liveQ = liveQuotes[ipo.code];
+  const liveQ = activeQuotes[ipo.code];
 
   content.innerHTML = `
     <div class="p-6">
@@ -700,12 +877,12 @@ renderLiveTicker();
 renderLivePrices();
 
 // ============ 自动轮询定时器 ============
-// 每5秒更新价格
-setInterval(() => {
-  updateLivePrices();
+// 每5秒更新价格（有 token 时用真实 API，否则模拟）
+setInterval(async () => {
+  await updateLivePricesReal();
   // 同步更新卡片中的实时价格
-  Object.keys(liveQuotes).forEach(code => {
-    const q = liveQuotes[code];
+  Object.keys(activeQuotes).forEach(code => {
+    const q = activeQuotes[code];
     document.querySelectorAll(`.live-card-price[data-code="${code}"]`).forEach(el => {
       el.textContent = q.price.toFixed(2);
       el.className = `text-xs font-bold ${q.change >= 0 ? 'text-green-400' : 'text-red-400'} live-card-price`;
@@ -735,6 +912,39 @@ setInterval(() => {
     }
   });
 }, 30000);
+
+// ============ API 配置按钮 ============
+const apiConfigBtn = document.getElementById('api-config-btn');
+if (apiConfigBtn) {
+  apiConfigBtn.addEventListener('click', openTokenModal);
+}
+
+// Token 弹窗事件
+const tokenSaveBtn = document.getElementById('token-save-btn');
+if (tokenSaveBtn) tokenSaveBtn.addEventListener('click', saveToken);
+
+const tokenCancelBtn = document.getElementById('token-cancel-btn');
+if (tokenCancelBtn) tokenCancelBtn.addEventListener('click', closeTokenModal);
+
+const tokenOverlay = document.getElementById('token-modal-overlay');
+if (tokenOverlay) {
+  tokenOverlay.addEventListener('click', (e) => {
+    if (e.target === tokenOverlay) closeTokenModal();
+  });
+}
+
+// Token 输入框回车确认
+const tokenInput = document.getElementById('token-input');
+if (tokenInput) {
+  tokenInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveToken();
+  });
+}
+
+// 每30分钟自动重新加载 API 数据（避免频率限制）
+setInterval(() => {
+  if (hasToken()) loadRealTimeData();
+}, 30 * 60 * 1000);
 
 // 倒计时更新
 setInterval(updateRefreshStatus, 1000);
