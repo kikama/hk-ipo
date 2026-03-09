@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>港股IPO打新分析平台 · 实时行情</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- 实时行情滚动条 -->
+  <div class="fixed top-0 left-0 right-0 z-[60] bg-gray-950 border-b border-gray-800 overflow-hidden" style="height:32px;">
+    <div class="flex items-center h-full">
+      <div class="shrink-0 flex items-center gap-2 px-3 bg-yellow-500 h-full">
+        <span class="w-1.5 h-1.5 rounded-full bg-gray-900 animate-pulse"></span>
+        <span class="text-xs font-bold text-gray-900">实时</span>
+      </div>
+      <div class="overflow-hidden flex-1 h-full relative">
+        <div id="live-ticker-content" class="ticker-track flex items-center h-full whitespace-nowrap absolute"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 顶部导航 -->
+  <nav class="fixed top-8 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+          <i class="fa-solid fa-chart-line text-gray-900 text-sm"></i>
+        </div>
+        <div>
+          <span class="font-bold text-lg text-white">港股IPO</span>
+          <span class="text-yellow-400 font-bold text-lg">打新分析</span>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center gap-6 text-sm text-gray-400">
+        <a href="#live-market" class="nav-link hover:text-yellow-400 transition-colors">实时行情</a>
+        <a href="#overview" class="nav-link hover:text-yellow-400 transition-colors">市场概览</a>
+        <a href="#ipo-list" class="nav-link hover:text-yellow-400 transition-colors">IPO列表</a>
+        <a href="#analysis" class="nav-link hover:text-yellow-400 transition-colors">深度分析</a>
+        <a href="#strategy" class="nav-link hover:text-yellow-400 transition-colors">打新策略</a>
+      </div>
+      <div class="flex items-center gap-3">
+        <!-- 刷新按钮 -->
+        <button id="refresh-btn" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-gray-300 hover:border-yellow-500 hover:text-yellow-400 transition-all">
+          <i class="fa-solid fa-rotate-right text-xs"></i>
+          <span>刷新</span>
+          <span id="refresh-countdown" class="text-gray-500">5s</span>
+        </button>
+        <!-- 刷新进度条 -->
+        <div class="hidden md:block w-16 h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div id="refresh-progress" class="h-full bg-yellow-400 rounded-full transition-all duration-1000" style="width:0%"></div>
+        </div>
+        <div id="refresh-indicator" class="hidden flex items-center gap-1 text-xs text-yellow-400">
+          <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+          <span>更新中</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500">实时：</span>
+          <span class="text-xs text-green-400 font-mono" id="update-time"></span>
+          <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse ml-1"></span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero区域 -->
+  <section class="pt-28 pb-8 px-4 bg-gradient-to-b from-gray-900 to-gray-950">
+    <div class="max-w-7xl mx-auto">
+      <div class="text-center py-8">
+        <div class="inline-flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/30 rounded-full px-4 py-1.5 text-yellow-400 text-sm mb-4">
+          <i class="fa-solid fa-fire-flame-curved"></i>
+          <span>2026年3月 · 港股打新热度持续升温</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-4">
+          港股IPO <span class="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">打新分析平台</span>
+        </h1>
+        <p class="text-gray-400 text-lg max-w-2xl mx-auto">
+          专业散户视角 · 深度基本面分析 · 量化打新评分 · <span class="text-green-400 font-medium">实时市场动态</span>
+        </p>
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+          <div class="stat-card bg-gray-800/60 border border-gray-700 rounded-xl px-6 py-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400">26只</div>
+            <div class="text-xs text-gray-400 mt-1">2026年已上市</div>
+          </div>
+          <div class="stat-card bg-gray-800/60 border border-gray-700 rounded-xl px-6 py-4 text-center">
+            <div class="text-2xl font-bold text-green-400">62%</div>
+            <div class="text-xs text-gray-400 mt-1">首日上涨比例</div>
+          </div>
+          <div class="stat-card bg-gray-800/60 border border-gray-700 rounded-xl px-6 py-4 text-center">
+            <div class="text-2xl font-bold text-blue-400">923亿</div>
+            <div class="text-xs text-gray-400 mt-1">年内募资总额(港元)</div>
+          </div>
+          <div class="stat-card bg-gray-800/60 border border-gray-700 rounded-xl px-6 py-4 text-center">
+            <div class="text-2xl font-bold text-purple-400">38%</div>
+            <div class="text-xs text-gray-400 mt-1">破发率</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实时行情面板 -->
+  <section id="live-market" class="py-8 px-4 bg-gray-900/80 border-y border-gray-800">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-1 h-6 bg-green-400 rounded-full"></div>
+          <h2 class="text-xl font-bold text-white">实时行情</h2>
+          <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-green-400/10 border border-green-400/30 text-green-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+            每5秒自动更新
+          </span>
+        </div>
+        <div class="text-xs text-gray-500">数据仅供参考，不构成投资建议</div>
+      </div>
+
+      <!-- 实时价格卡片 -->
+      <div id="live-prices" class="flex flex-wrap gap-4 mb-6"></div>
+
+      <!-- 实时资讯流 -->
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <div class="flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-rss text-yellow-400 text-sm"></i>
+          <h3 class="text-sm font-semibold text-gray-300">实时资讯流</h3>
+          <span class="text-xs text-gray-600">· 每15秒自动更新</span>
+        </div>
+        <div id="news-feed" class="space-y-2 max-h-48 overflow-y-auto news-scroll"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 市场概览 -->
+  <section id="overview" class="py-10 px-4">
+    <div class="max-w-7xl mx-auto">
+      <div class="section-title flex items-center gap-3 mb-8">
+        <div class="w-1 h-6 bg-yellow-400 rounded-full"></div>
+        <h2 class="text-xl font-bold text-white">市场概览</h2>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-yellow-400"></i> 2026年IPO行业分布
+          </h3>
+          <div id="industryChart" style="height:220px;"></div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-chart-bar text-blue-400"></i> 月度募资趋势(亿港元)
+          </h3>
+          <div id="monthlyChart" style="height:220px;"></div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-chart-area text-green-400"></i> 首日涨跌幅分布
+          </h3>
+          <div id="performanceChart" style="height:220px;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- IPO列表 -->
+  <section id="ipo-list" class="py-10 px-4">
+    <div class="max-w-7xl mx-auto">
+      <div class="section-title flex items-center justify-between mb-8">
+        <div class="flex items-center gap-3">
+          <div class="w-1 h-6 bg-blue-400 rounded-full"></div>
+          <h2 class="text-xl font-bold text-white">当前IPO列表</h2>
+          <span class="text-xs text-gray-500">· 招股中标的认购倍数实时更新</span>
+        </div>
+        <div class="flex gap-2" id="filter-btns">
+          <button class="filter-btn active text-xs px-3 py-1.5 rounded-full border border-blue-500 bg-blue-500/20 text-blue-400" data-filter="all">全部</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-full border border-gray-700 text-gray-400 hover:border-yellow-500 hover:text-yellow-400 transition-colors" data-filter="recruiting">招股中</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-full border border-gray-700 text-gray-400 hover:border-green-500 hover:text-green-400 transition-colors" data-filter="upcoming">即将上市</button>
+          <button class="filter-btn text-xs px-3 py-1.5 rounded-full border border-gray-700 text-gray-400 hover:border-purple-500 hover:text-purple-400 transition-colors" data-filter="listed">已上市</button>
+        </div>
+      </div>
+      <div id="ipo-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+    </div>
+  </section>
+
+  <!-- 深度分析 -->
+  <section id="analysis" class="py-10 px-4 bg-gray-900/50">
+    <div class="max-w-7xl mx-auto">
+      <div class="section-title flex items-center gap-3 mb-8">
+        <div class="w-1 h-6 bg-purple-400 rounded-full"></div>
+        <h2 class="text-xl font-bold text-white">重点新股深度分析</h2>
+      </div>
+      <div id="detail-tabs" class="flex gap-2 mb-6 overflow-x-auto pb-2"></div>
+      <div id="detail-content"></div>
+    </div>
+  </section>
+
+  <!-- 打新策略 -->
+  <section id="strategy" class="py-10 px-4">
+    <div class="max-w-7xl mx-auto">
+      <div class="section-title flex items-center gap-3 mb-8">
+        <div class="w-1 h-6 bg-green-400 rounded-full"></div>
+        <h2 class="text-xl font-bold text-white">专业打新策略</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-yellow-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-yellow-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-magnifying-glass-chart text-yellow-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">基石投资者分析</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">基石投资者比例越高，上市后锁定期内抛压越小。高瓴、淡马锡、红杉等顶级机构参投是重要加分项，通常意味着机构对公司长期价值的认可。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-yellow-400">
+            <i class="fa-solid fa-star"></i>
+            <span>关键指标：基石比例 &gt; 30% 为优质信号</span>
+          </div>
+        </div>
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-blue-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-blue-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-scale-balanced text-blue-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">AH股折价套利</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">A+H股同时上市时，H股通常以折价发行。折价率超过40%时，H股具备较强的安全边际。需同时关注A股走势，避免A股大幅下跌导致折价优势消失。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-blue-400">
+            <i class="fa-solid fa-star"></i>
+            <span>关键指标：H股折价率 &gt; 40% 为理想区间</span>
+          </div>
+        </div>
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-green-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-green-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-clock text-green-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">3日内卖出策略</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">中金研究显示，港股新股上市3日内卖出收益最高，成功率达92%。暗盘涨幅可作为参考，暗盘涨超10%通常意味着上市首日有较好表现。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-green-400">
+            <i class="fa-solid fa-star"></i>
+            <span>关键指标：暗盘涨幅 &gt; 10% 可积极参与</span>
+          </div>
+        </div>
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-red-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-red-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-triangle-exclamation text-red-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">破发风险识别</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">亏损企业、高估值、小盘股是破发高危信号。2026年破发率约38%，需重点关注：PE是否合理、行业景气度、募资用途是否清晰、管理层背景。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-red-400">
+            <i class="fa-solid fa-star"></i>
+            <span>警惕：亏损+高估值+小盘 = 高破发风险</span>
+          </div>
+        </div>
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-purple-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-purple-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-layer-group text-purple-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">分散申购原则</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">避免集中资金单押一只新股。建议将打新资金分散至3-5只不同行业的新股，降低单只破发带来的损失。优先选择评分8分以上的标的。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-purple-400">
+            <i class="fa-solid fa-star"></i>
+            <span>建议：单只新股资金占比不超过30%</span>
+          </div>
+        </div>
+        <div class="strategy-card bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-orange-500/50 transition-all">
+          <div class="w-10 h-10 rounded-xl bg-orange-400/10 flex items-center justify-center mb-4">
+            <i class="fa-solid fa-fire text-orange-400"></i>
+          </div>
+          <h3 class="font-bold text-white mb-2">热门赛道优先</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">2026年AI、半导体、手术机器人等科技赛道持续受资本热捧。热门赛道新股认购倍数高，中签率低但首日涨幅可观。消费股适合稳健型投资者。</p>
+          <div class="mt-4 flex items-center gap-2 text-xs text-orange-400">
+            <i class="fa-solid fa-star"></i>
+            <span>热门赛道：AI > 半导体 > 医疗器械 > 消费</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 打新日历 -->
+  <section class="py-10 px-4 bg-gray-900/50">
+    <div class="max-w-7xl mx-auto">
+      <div class="section-title flex items-center gap-3 mb-8">
+        <div class="w-1 h-6 bg-orange-400 rounded-full"></div>
+        <h2 class="text-xl font-bold text-white">3月打新日历</h2>
+      </div>
+      <div id="calendar-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+    </div>
+  </section>
+
+  <!-- 评分说明 -->
+  <section class="py-10 px-4">
+    <div class="max-w-7xl mx-auto">
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+        <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-circle-info text-blue-400"></i>
+          打新评分体系说明
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="text-center p-4 bg-gray-800/50 rounded-xl">
+            <div class="text-2xl font-bold text-green-400 mb-1">9-10分</div>
+            <div class="text-xs text-gray-400">强烈推荐打新</div>
+            <div class="text-xs text-green-400 mt-1">积极参与</div>
+          </div>
+          <div class="text-center p-4 bg-gray-800/50 rounded-xl">
+            <div class="text-2xl font-bold text-blue-400 mb-1">7-8分</div>
+            <div class="text-xs text-gray-400">建议参与打新</div>
+            <div class="text-xs text-blue-400 mt-1">可以参与</div>
+          </div>
+          <div class="text-center p-4 bg-gray-800/50 rounded-xl">
+            <div class="text-2xl font-bold text-yellow-400 mb-1">5-6分</div>
+            <div class="text-xs text-gray-400">谨慎参与</div>
+            <div class="text-xs text-yellow-400 mt-1">视情况而定</div>
+          </div>
+          <div class="text-center p-4 bg-gray-800/50 rounded-xl">
+            <div class="text-2xl font-bold text-red-400 mb-1">1-4分</div>
+            <div class="text-xs text-gray-400">不建议参与</div>
+            <div class="text-xs text-red-400 mt-1">回避风险</div>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs text-gray-400">
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>基本面质量 (25%)</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-400"></span>估值合理性 (20%)</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-400"></span>行业景气度 (20%)</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-purple-400"></span>机构认可度 (20%)</div>
+          <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-orange-400"></span>市场热度 (15%)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 免责声明 -->
+  <footer class="py-8 px-4 border-t border-gray-800">
+    <div class="max-w-7xl mx-auto text-center">
+      <p class="text-xs text-gray-600 mb-2">⚠️ 免责声明：本平台所有分析内容仅供参考，不构成投资建议。港股投资存在风险，打新有亏损可能，请投资者自行判断并承担相应风险。</p>
+      <p class="text-xs text-gray-700">数据来源：港交所、新浪财经、东方财富、雪球等公开信息 · 实时价格为模拟数据，仅供演示</p>
+      <p class="mt-4 text-gray-600 text-sm">由 <a href="https://with.woa.com/" style="color: #8A2BE2;" target="_blank">With</a> 通过自然语言生成</p>
+    </div>
+  </footer>
+
+  <!-- 详情弹窗 -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="modal-content" class="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"></div>
+  </div>
+
+  <script src="data.js" type="module"></script>
+  <script src="charts.js" type="module"></script>
+  <script src="main.js" type="module"></script>
+
+  <!-- 实时资讯流渲染（内联，依赖main.js初始化后的数据） -->
+  <script type="module">
+    import { liveNews, generateLiveNews } from './data.js';
+
+    function renderNewsFeed() {
+      const container = document.getElementById('news-feed');
+      if (!container) return;
+      const colorMap = {
+        yellow: 'text-yellow-400 bg-yellow-400/10',
+        red: 'text-red-400 bg-red-400/10',
+        blue: 'text-blue-400 bg-blue-400/10',
+        green: 'text-green-400 bg-green-400/10',
+        purple: 'text-purple-400 bg-purple-400/10',
+        orange: 'text-orange-400 bg-orange-400/10'
+      };
+      const items = [...liveNews].slice(0, 10);
+      container.innerHTML = items.map((n, i) => {
+        const cls = colorMap[n.color] || 'text-gray-400 bg-gray-400/10';
+        return `<div class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-800/50 transition-colors ${i === 0 ? 'news-new' : ''}">
+          <span class="text-xs text-gray-600 shrink-0 mt-0.5 font-mono">${n.time}</span>
+          <span class="text-xs px-1.5 py-0.5 rounded ${cls} font-medium shrink-0">${n.tag}</span>
+          <span class="text-xs text-gray-300 leading-relaxed">${n.text}</span>
+        </div>`;
+      }).join('');
+    }
+
+    renderNewsFeed();
+
+    // 每15秒刷新资讯流
+    setInterval(() => {
+      const newItem = generateLiveNews();
+      liveNews.unshift(newItem);
+      if (liveNews.length > 20) liveNews.pop();
+      renderNewsFeed();
+    }, 15000);
+  </script>
+</body>
+</html>
